@@ -3,7 +3,9 @@ package newrelic
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/newrelic/newrelic-client-go/pkg/alerts"
@@ -192,10 +194,14 @@ func flattenAlertChannelConfiguration(c *alerts.ChannelConfiguration, d *schema.
 
 	configResult := make(map[string]interface{})
 
+	// Conditionally sets some values the API deems sensitive
+	// on the configResult map based on what the user
+	// supplied in their config HCL.
+	setSensitiveConfigValues(configResult, c, d)
+
 	configResult["auth_username"] = c.AuthUsername
 	configResult["base_url"] = c.BaseURL
 	configResult["channel"] = c.Channel
-	configResult["key"] = c.Key
 	configResult["include_json_attachment"] = c.IncludeJSONAttachment
 	configResult["payload_type"] = c.PayloadType
 	configResult["recipients"] = c.Recipients
@@ -205,6 +211,75 @@ func flattenAlertChannelConfiguration(c *alerts.ChannelConfiguration, d *schema.
 	configResult["teams"] = c.Teams
 	configResult["user_id"] = c.UserID
 
+	// Use the current state to detect if an import
+	// is being attempted.
+	state := d.State()
+
+	// An empty config means TF doesn't know about it yet because
+	// at least one config attribute is required for a given channel type.
+	isImportState := len(state.Attributes["config"]) == 0
+
+	headersString, headersStringOk := d.GetOk("config.0.header_string")
+	_, payloadStringOk := d.GetOk("config.0.payload_string")
+
+	headers, headersOk := d.GetOk("config.0.headers")
+	_, _ = d.GetOk("config.0.payload")
+
+	log.Print("\n\n **************************** \n")
+	log.Printf("\n IS IMPORT:       %+v  \n", isImportState)
+	log.Printf("\n HEADER STRING:   %+v - %+v - %+v \n", headersString, headersStringOk, c.Headers)
+	// log.Printf("\n PAYLOAD STRING:  %+v - %+v - %+v \n", payloadString, payloadStringOk, c.Payload)
+	log.Print("\n **************************** \n")
+	log.Printf("\n IS IMPORT:  %+v  \n", isImportState)
+	log.Printf("\n HEADER:     %+v - %+v \n", headers, headersOk)
+	// log.Printf("\n PAYLOAD:    %+v - %+v \n", payload, payloadOk)
+	log.Print("\n **************************** \n\n")
+	time.Sleep(7 * time.Second)
+
+	// if headersOk && !headersStringOk
+
+	if _, ok := d.GetOk("config.0.headers"); ok || isImportState && !headersStringOk {
+		configResult["headers"] = c.Headers
+	} else if _, ok := d.GetOk("config.0.headers_string"); ok {
+		h, err := json.Marshal(c.Headers)
+
+		if err != nil {
+			return nil, err
+		}
+
+		configResult["headers_string"] = string(h)
+	}
+
+	if _, ok := d.GetOk("config.0.payload"); ok || isImportState && !payloadStringOk {
+		configResult["payload"] = c.Payload
+	} else if _, ok := d.GetOk("config.0.payload_string"); ok || isImportState {
+		h, err := json.Marshal(c.Payload)
+
+		if err != nil {
+			return nil, err
+		}
+
+		configResult["payload_string"] = string(h)
+	}
+
+	return []interface{}{configResult}, nil
+}
+
+func validateChannelConfiguration(config alerts.ChannelConfiguration) error {
+	if len(config.Payload) != 0 && config.PayloadType == "" {
+		return errors.New("payload_type is required when using payload")
+	}
+
+	return nil
+}
+
+// The Rest API treats these fields as sensitive and does NOT
+// return them as part of the GET response.
+func setSensitiveConfigValues(
+	configResult map[string]interface{},
+	c *alerts.ChannelConfiguration,
+	d *schema.ResourceData,
+) {
 	if attr, ok := d.GetOk("config.0.auth_password"); ok {
 		if c.AuthPassword != "" {
 			configResult["auth_password"] = c.AuthPassword
@@ -244,38 +319,4 @@ func flattenAlertChannelConfiguration(c *alerts.ChannelConfiguration, d *schema.
 			configResult["service_key"] = attr.(string)
 		}
 	}
-
-	if _, ok := d.GetOk("config.0.headers"); ok {
-		configResult["headers"] = c.Headers
-	} else if _, ok := d.GetOk("config.0.headers_string"); ok {
-		h, err := json.Marshal(c.Headers)
-
-		if err != nil {
-			return nil, err
-		}
-
-		configResult["headers_string"] = string(h)
-	}
-
-	if _, ok := d.GetOk("config.0.payload"); ok {
-		configResult["payload"] = c.Payload
-	} else if _, ok := d.GetOk("config.0.payload_string"); ok {
-		h, err := json.Marshal(c.Payload)
-
-		if err != nil {
-			return nil, err
-		}
-
-		configResult["payload_string"] = string(h)
-	}
-
-	return []interface{}{configResult}, nil
-}
-
-func validateChannelConfiguration(config alerts.ChannelConfiguration) error {
-	if len(config.Payload) != 0 && config.PayloadType == "" {
-		return errors.New("payload_type is required when using payload")
-	}
-
-	return nil
 }

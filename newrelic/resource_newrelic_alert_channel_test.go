@@ -84,7 +84,10 @@ func TestAccNewRelicAlertChannel_Webhook(t *testing.T) {
 					base_url = "http://www.test.com"
 					payload_type = "application/json"
 					payload = {
-						"test": "value"
+						test = "value"
+					}
+					headers = {
+						header1 = "test-header"
 					}
 					auth_password = "abc123"
 					auth_username = "reli"
@@ -103,7 +106,6 @@ func TestAccNewRelicAlertChannel_Webhook(t *testing.T) {
 				ImportStateVerifyIgnore: []string{
 					"config.0.base_url",
 					"config.0.auth_password",
-					// "config.0.payload",
 				},
 			},
 		},

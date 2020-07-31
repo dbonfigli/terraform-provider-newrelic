@@ -160,11 +160,16 @@ func resourceNewRelicAlertChannel() *schema.Resource {
 						"payload": {
 							Type:          schema.TypeMap,
 							Elem:          &schema.Schema{Type: schema.TypeString},
-							Sensitive:     false,
+							Sensitive:     true,
 							Optional:      true,
 							ForceNew:      true,
 							ConflictsWith: []string{"config.0.payload_string"},
 							Description:   "A map of key/value pairs that represents the webhook payload. Must provide payload_type if setting this argument.",
+							StateFunc: func(v interface{}) string {
+								log.Printf("\n\n **** \n\n StateFunc: %+v \n\n ****** \n\n", v)
+
+								return ""
+							},
 						},
 						"payload_string": {
 							Type:          schema.TypeString,
