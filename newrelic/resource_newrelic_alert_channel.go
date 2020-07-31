@@ -160,7 +160,7 @@ func resourceNewRelicAlertChannel() *schema.Resource {
 						"payload": {
 							Type:          schema.TypeMap,
 							Elem:          &schema.Schema{Type: schema.TypeString},
-							Sensitive:     true,
+							Sensitive:     false,
 							Optional:      true,
 							ForceNew:      true,
 							ConflictsWith: []string{"config.0.payload_string"},
